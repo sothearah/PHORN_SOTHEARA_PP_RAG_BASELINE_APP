@@ -1,0 +1,37 @@
+New Hire Onboarding Guide — Novalink Devices
+
+Week 1: Setup
+Day 1 is spent in IT and HR orientation. New hires receive a laptop, an
+employee ID badge, and access credentials for email, chat, and the internal
+wiki. A welcome lunch with the immediate team is scheduled for Day 1
+afternoon.
+
+Week 1: Accounts and Access
+By end of Week 1, new hires should have access to: the company email system,
+the shared drive for their department, the project tracker (Jira), and the
+internal wiki (Confluence). Access requests that are still pending after 5
+business days should be escalated to the IT helpdesk.
+
+Week 2: Role-Specific Training
+Each department runs its own Week 2 curriculum. Engineering new hires shadow
+a senior engineer on two code reviews and complete the "Local Dev Environment"
+setup checklist. Sales new hires shadow two client calls and complete CRM
+training.
+
+30-60-90 Day Check-ins
+- Day 30: Informal check-in with manager to discuss early wins and blockers.
+- Day 60: Formal check-in covering progress against the role's initial goals,
+  documented in the performance system.
+- Day 90: Probationary period review. Successful completion unlocks benefits
+  enrollment window extension and eligibility to apply for remote work
+  arrangements.
+
+Buddy Program
+Every new hire is paired with a "buddy" from a different team for their first
+90 days. The buddy is available for informal questions ("who do I ask about
+X") and is not the same person as the new hire's manager.
+
+Key Contacts
+- IT Helpdesk: for laptop, account, and software access issues.
+- HR: for benefits, payroll, and policy questions.
+- Facilities: for badge access and desk assignment (on-site staff only).
