@@ -9,17 +9,14 @@ Run:
 
 Make sure you've run `poetry run python -m app.ingest` at least once first.
 """
-from app.generate import generate_answer
-from app.retrieval import retrieve
+from app.pipeline import ask
 
-# Three "in scope" questions the sample documents can actually answer,
-# and one "out of scope" question to check the model admits it doesn't know
-# instead of making something up.
+
 TEST_QUESTIONS = [
     "How many in-office days per week do hybrid employees need?",
     "How much is the home-office equipment stipend?",
     "How long do I have to submit an expense report?",
-    "What is the CEO's home address?",  # deliberately not in any document
+    "What is the CEO's home address?",
     "What is my cat name?",
     "What should a new employee complete during onboarding?",
 ]
@@ -29,26 +26,36 @@ def run_query(question: str) -> None:
     print("=" * 80)
     print(f"Q: {question}")
 
-    chunks = retrieve(question)
+    result = ask(question)
+    chunks = result["chunks"]
+
     print(f"\nRetrieved {len(chunks)} chunks:")
-    for c in chunks:
-        preview = c["text"][:80].replace("\n", " ")
-        print(f"  - [{c['source']} #{c['chunk_index']}] dist={c['distance']:.4f}  \"{preview}...\"")
 
-    answer = generate_answer(question, chunks)
-    print(f"\nA: {answer}")
+    for chunk in chunks:
+        preview = chunk["text"][:80].replace("\n", " ")
 
-    # Very basic sanity check, not a real eval metric: did the model cite a
-    # source, or at least stay short and cautious, when nothing relevant was
-    # retrieved? This is the kind of check worth automating once you have
-    # more than a handful of questions.
-    best_distance = min((c["distance"] for c in chunks), default=None)
+        print(
+            f"  - [{chunk['source']} #{chunk['chunk_index']}] "
+            f"dist={chunk['distance']:.4f} "
+            f'"{preview}..."'
+        )
+
+    print(f"\nA: {result['answer']}")
+
+    best_distance = min(
+        (chunk["distance"] for chunk in chunks),
+        default=None,
+    )
+
     if best_distance is not None and best_distance > 1.0:
-        print("\n[note] Weak retrieval match (best distance > 1.0) — "
-              "worth checking if the answer stayed cautious rather than guessing.")
+        print(
+            "\n[note] Weak retrieval match (best distance > 1.0) — "
+            "check whether the answer stayed cautious instead of guessing."
+        )
 
 
 if __name__ == "__main__":
-    for q in TEST_QUESTIONS:
-        run_query(q)
+    for question in TEST_QUESTIONS:
+        run_query(question)
+
     print("=" * 80)

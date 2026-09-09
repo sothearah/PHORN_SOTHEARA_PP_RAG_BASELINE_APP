@@ -1,27 +1,24 @@
 """
-The whole app, end to end, exposed as a tiny API — no framework magic,
-just three plain functions wired together.
+Main entry point for the local Naive RAG application.
 
-Run it:
+CLI:
+    poetry run python -m app.main
+
+Optional FastAPI server:
     poetry run uvicorn app.main:app --reload
-
-Then test it with curl (see README.md for full examples):
-    curl -X POST http://127.0.0.1:8000/ingest
-    curl -X POST http://127.0.0.1:8000/chat -H "Content-Type: application/json" \
-         -d '{"question": "What is the vacation policy?"}'
 """
-import logging
 
-logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)
+import logging
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from app.generate import generate_answer
-from app.ingest import build_index
-from app.retrieval import retrieve
+from app.ingestion import build_index
+from app.pipeline import ask
 
-app = FastAPI(title="Baseline Chat-with-Documents API")
+logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)
+
+app = FastAPI(title="Local Naive RAG")
 
 
 class ChatRequest(BaseModel):
@@ -36,28 +33,44 @@ class ChatResponse(BaseModel):
 
 @app.post("/ingest")
 def ingest():
-    """(Re)build the vector index from everything in data/."""
+    """
+    Rebuild the local vector index from documents in data/.
+    """
     try:
         count = build_index()
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
     return {"chunks_indexed": count}
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest):
-    """The full retrieve -> augment -> generate loop for one question."""
-    if not req.question.strip():
-        raise HTTPException(status_code=400, detail="question must not be empty")
+def chat(request: ChatRequest):
+    """
+    Answer one question through the full RAG pipeline.
+    """
+    if not request.question.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="question must not be empty",
+        )
 
-    chunks = retrieve(req.question, top_k=req.top_k) if req.top_k else retrieve(req.question)
-    answer = generate_answer(req.question, chunks)
-    sources = sorted({c["source"] for c in chunks})
-    return ChatResponse(answer=answer, sources=sources)
+    result = ask(request.question, top_k=request.top_k)
+    sources = sorted(
+        {chunk["source"] for chunk in result["chunks"]}
+    )
 
-# add cli in termianl
-def run_cli():
-    print("Baseline RAG Chat")
+    return ChatResponse(
+        answer=result["answer"],
+        sources=sources,
+    )
+
+
+def run_cli() -> None:
+    """
+    Run a simple terminal chat loop.
+    """
+    print("Local Naive RAG Chat")
     print("Type 'exit' to quit.\n")
 
     while True:
@@ -71,17 +84,20 @@ def run_cli():
             print("Please enter a question.\n")
             continue
 
-        chunks = retrieve(question)
-        answer = generate_answer(question, chunks)
+        try:
+            result = ask(question)
+        except RuntimeError as error:
+            print(f"\nError: {error}\n")
+            continue
 
         print("\nRetrieved chunks:")
-        for c in chunks:
+        for chunk in result["chunks"]:
             print(
-                f"- [{c['source']} #{c['chunk_index']}] "
-                f"distance={c['distance']:.4f}"
+                f"- [{chunk['source']} #{chunk['chunk_index']}] "
+                f"distance={chunk['distance']:.4f}"
             )
 
-        print(f"\nAssistant: {answer}\n")
+        print(f"\nAssistant: {result['answer']}\n")
 
 
 if __name__ == "__main__":
