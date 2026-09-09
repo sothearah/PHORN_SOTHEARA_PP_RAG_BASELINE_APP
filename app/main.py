@@ -54,3 +54,35 @@ def chat(req: ChatRequest):
     answer = generate_answer(req.question, chunks)
     sources = sorted({c["source"] for c in chunks})
     return ChatResponse(answer=answer, sources=sources)
+
+# add cli in termianl
+def run_cli():
+    print("Baseline RAG Chat")
+    print("Type 'exit' to quit.\n")
+
+    while True:
+        question = input("You: ").strip()
+
+        if question.lower() == "exit":
+            print("Goodbye!")
+            break
+
+        if not question:
+            print("Please enter a question.\n")
+            continue
+
+        chunks = retrieve(question)
+        answer = generate_answer(question, chunks)
+
+        print("\nRetrieved chunks:")
+        for c in chunks:
+            print(
+                f"- [{c['source']} #{c['chunk_index']}] "
+                f"distance={c['distance']:.4f}"
+            )
+
+        print(f"\nAssistant: {answer}\n")
+
+
+if __name__ == "__main__":
+    run_cli()

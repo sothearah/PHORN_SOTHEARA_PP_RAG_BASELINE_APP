@@ -5,7 +5,7 @@ Change a value here and the whole app picks it up — no hunting through files.
 
 # --- Models (must already be pulled in Ollama: `ollama pull <name>`) ---
 EMBED_MODEL = "nomic-embed-text"
-GEN_MODEL = "llama3:8b "
+GEN_MODEL = "llama3.2"
 
 # --- Storage ---
 DATA_DIR = "data"                  # where source documents live

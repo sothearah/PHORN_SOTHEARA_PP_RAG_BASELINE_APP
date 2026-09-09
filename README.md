@@ -1,291 +1,450 @@
-# Baseline Chat-with-Documents App
+# Baseline Chat-with-Documents RAG
 
-A minimal, hands-on RAG (Retrieval-Augmented Generation) pipeline exposed as a
-real REST API with FastAPI. Every stage is a plain Python function you can read
-top to bottom — nothing is hidden behind a framework's abstractions.
+## Overview
+
+This project is a local Naive Retrieval-Augmented Generation (RAG) application.
+
+It reads documents from the `data/` folder, splits them into chunks, converts those chunks into embeddings, stores the embeddings in ChromaDB, retrieves the most relevant chunks for a user question, and sends those chunks to a local LLM through Ollama to generate a grounded answer.
+
+The main RAG flow is:
+
+```text
+Documents
+→ Ingestion
+→ Chunking
+→ Embedding
+→ Vector Storage
+→ Retrieval
+→ Generation
+→ Answer
+```
 
 ---
 
-## What is RAG? (Read this first)
+## What Is RAG?
 
-Large language models (LLMs) like Llama or Qwen are trained on public internet
-data. They are smart at reasoning, but they know nothing about *your* documents
-— your company policies, your research notes, your own data.
+Large language models can answer many general questions, but they do not automatically know the contents of private or local documents.
 
-**RAG is the solution.** Instead of retraining the model (expensive, slow), RAG
-retrieves the relevant pieces of *your* documents at query time and hands them
-to the LLM as extra context in the prompt. The LLM then answers based on what
-you gave it, not what it already knows.
+Retrieval-Augmented Generation (RAG) solves this by retrieving relevant pieces of local documents at query time and providing them to the language model as context.
 
-The full loop has four stages:
+This baseline system follows these stages:
 
-```
-Stage 1 — LOAD & CHUNK
-  Your documents (.txt / .pdf) are split into small overlapping chunks
-  (e.g. 800 characters each). Smaller pieces are easier to match against
-  a specific question.
+1. **Load and chunk** the source documents.
+2. **Embed and store** the chunks in a vector database.
+3. **Retrieve** the chunks most similar to the user's question.
+4. **Generate** an answer using the retrieved context.
 
-Stage 2 — EMBED & STORE
-  Each chunk is converted into a vector (a list of numbers that captures
-  meaning) by an embedding model. The vectors are stored in a vector
-  database (ChromaDB). This is the "index".
-
-Stage 3 — RETRIEVE
-  When the user asks a question, the question is also embedded into a
-  vector. The vector DB finds the chunks whose vectors are closest to the
-  question vector (semantic similarity, not keyword match).
-
-Stage 4 — GENERATE
-  The top-k retrieved chunks + the original question are assembled into a
-  prompt and sent to the LLM. The LLM generates an answer grounded only
-  in those chunks.
-```
-
-Key insight: the model never "searches" anything. It only reads what you put
-in front of it. RAG is the system that decides *what* to put in front of it.
+The language model does not search the vector database itself. The RAG pipeline retrieves the context first and then sends that context to the model.
 
 ---
 
-## Architecture of This App
+## Technologies Used
 
-```
-data/*.txt, *.pdf
-        |
-  [app/ingest.py]          ← Stage 1 & 2: chunk, embed, store
-        |
-  chroma_db/               ← persisted vector index
-        |
-        |←── user question
-  [app/retrieval.py]       ← Stage 3: embed question, find top-k chunks
-        |
-  top-k chunks + question
-        |
-  [app/generate.py]        ← Stage 4: build prompt, call Ollama LLM
-        |
-  grounded answer
-```
-
-All of this is wired together in `app/main.py` as a FastAPI application with
-three HTTP endpoints — making the whole pipeline accessible from any client
-(browser, mobile app, Postman, another service).
+- Python 3.12
+- Poetry
+- Ollama
+- ChromaDB
+- FastAPI
+- Uvicorn
+- PyPDF
 
 ---
 
-## Prerequisites
+## Models
 
-### 1. Ollama (local LLM server)
+### Generation Model
 
-Ollama runs LLMs locally on your machine. Install it from [ollama.com](https://ollama.com),
-then pull the two models this app needs:
+`llama3.2`
+
+This model generates the final answer from the user question and retrieved document context.
+
+Install it with:
 
 ```bash
-ollama pull nomic-embed-text   # embedding model (Stage 2 & 3)
-ollama pull qwen3:8b           # generation model (Stage 4)
+ollama pull llama3.2
 ```
 
-Verify Ollama is running:
+### Embedding Model
+
+`nomic-embed-text`
+
+This model converts document chunks and user questions into numerical vectors that can be compared using vector similarity search.
+
+Install it with:
+
 ```bash
-ollama list   # should show both models
+ollama pull nomic-embed-text
 ```
 
-### 2. Poetry (Python package manager)
+Verify the installed models:
 
-Poetry manages Python dependencies cleanly. Install it once:
 ```bash
-pipx install poetry
+ollama list
 ```
 
-Or check [python-poetry.org](https://python-poetry.org) for other install options.
+---
+
+## Vector Database
+
+This project uses **ChromaDB in persistent mode**.
+
+The vector database is stored in:
+
+```text
+chroma_db/
+```
+
+For each chunk, the vector store keeps information such as:
+
+- chunk text
+- embedding vector
+- source filename
+- chunk index
+- metadata
+
+---
+
+## Project Structure
+
+```text
+RAG-BASELINE-APP/
+│
+├── app/
+│   ├── __init__.py
+│   ├── config.py
+│   ├── embeddings.py
+│   ├── generate.py
+│   ├── ingest.py
+│   ├── main.py
+│   └── retrieval.py
+│
+├── data/
+│   └── source documents
+│
+├── scripts/
+│   └── test_queries.py
+│
+├── chroma_db/
+├── README.md
+├── test_log.md
+├── poetry.lock
+└── pyproject.toml
+```
+
+---
+
+## RAG Pipeline
+
+### 1. Ingestion
+
+`app/ingest.py`
+
+The ingestion stage reads supported source files from the `data/` folder.
+
+Supported formats in the current implementation are:
+
+- `.txt`
+- `.md`
+- `.pdf`
+
+Text files are read directly. PDF text is extracted using PyPDF.
+
+---
+
+### 2. Chunking
+
+The project uses **fixed-size character chunking with overlap**.
+
+Current configuration:
+
+```python
+CHUNK_SIZE = 800
+CHUNK_OVERLAP = 120
+```
+
+Each chunk contains up to 800 characters. Consecutive chunks share 120 characters.
+
+Example:
+
+```text
+Chunk 1
+0 ------------------------ 800
+
+Chunk 2
+                     680 ------------------------ 1480
+                     <---- 120 overlap ---->
+```
+
+### Why This Chunking Strategy Was Used
+
+Fixed-size chunking was chosen because it is simple and appropriate for a baseline Naive RAG implementation.
+
+The 120-character overlap helps preserve context when important information is located near a chunk boundary. Without overlap, a sentence or idea could be split between two chunks and become harder to retrieve.
+
+A future improvement could use semantic chunking or document-structure-aware chunking so that related ideas remain together more naturally.
+
+---
+
+### 3. Embedding
+
+`app/embeddings.py`
+
+Each chunk is converted into an embedding using:
+
+```text
+nomic-embed-text
+```
+
+Conceptually:
+
+```text
+Document chunk
+      ↓
+nomic-embed-text
+      ↓
+[0.12, -0.43, 0.71, ...]
+```
+
+The same embedding model is also used for user questions during retrieval.
+
+---
+
+### 4. Vector Storage
+
+The chunk text, embeddings, and metadata are stored in ChromaDB.
+
+Each chunk receives a unique ID based on its source filename and chunk index.
+
+Example:
+
+```text
+expense_policy.txt::0
+expense_policy.txt::1
+```
+
+---
+
+### 5. Retrieval
+
+`app/retrieval.py`
+
+When the user asks a question:
+
+1. The question is embedded with `nomic-embed-text`.
+2. ChromaDB compares the question vector with the stored chunk vectors.
+3. The most relevant chunks are returned.
+
+Current configuration:
+
+```python
+TOP_K = 4
+```
+
+Therefore, the application retrieves the top 4 chunks for each question.
+
+The test script also prints vector distance values. Lower distances generally indicate a stronger semantic match.
+
+---
+
+### 6. Generation
+
+`app/generate.py`
+
+The retrieved chunks and the original user question are passed to:
+
+```text
+llama3.2
+```
+
+The system prompt instructs the model to answer only using the retrieved context.
+
+If the documents do not contain enough information, the expected response is:
+
+```text
+I don't have enough information in the documents to answer that.
+```
+
+This helps keep answers grounded in the document collection.
 
 ---
 
 ## Setup
 
+### 1. Install Project Dependencies
+
+From the project folder, run:
+
 ```bash
-cd rag-baseline-app
-poetry install        # installs all dependencies into an isolated virtual env
+poetry install
+```
+
+Check the Python version used by Poetry:
+
+```bash
+poetry run python --version
+```
+
+This project was tested with Python 3.12.
+
+### 2. Install the Required Ollama Models
+
+```bash
+ollama pull llama3.2
+ollama pull nomic-embed-text
+```
+
+Verify:
+
+```bash
+ollama list
 ```
 
 ---
 
-## Running the App — Step by Step
+## Prepare Documents
 
-### Step 1: Build the Index
+Place 3–5 source documents inside:
 
-This reads all files in `data/`, splits them into chunks, embeds them, and
-stores them in `chroma_db/`. You must do this before asking any questions.
+```text
+data/
+```
+
+The current implementation supports `.txt`, `.md`, and `.pdf` files.
+
+---
+
+## Build the Vector Index
+
+Run:
 
 ```bash
 poetry run python -m app.ingest
 ```
 
-Expected output:
-```
-Indexed 8 chunks from 'data/' into Chroma at 'chroma_db/'.
-```
+Result from this project:
 
-> **To use your own documents:** drop `.txt`, `.md`, or `.pdf` files into
-> `data/`, delete the old `chroma_db/` folder, and re-run this command.
-
-### Step 2: Start the API Server
-
-```bash
-poetry run uvicorn app.main:app --reload
+```text
+Indexed 28 chunks from 'data/' into Chroma at 'chroma_db/'.
 ```
 
-You should see:
-```
-INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
-```
+This performs:
 
-The `--reload` flag means the server restarts automatically when you save a
-file — great for development.
-
-### Step 3: Test the API
-
-Open a new terminal tab (keep the server running) and try these commands:
-
-**Health check — is the server alive?**
-```bash
-curl http://127.0.0.1:8000/health
+```text
+Load documents
+→ Split into chunks
+→ Generate embeddings
+→ Store embeddings in ChromaDB
 ```
 
-**Re-trigger ingestion over HTTP** (same as Step 1, but via the API):
-```bash
-curl -X POST http://127.0.0.1:8000/ingest
-```
+---
 
-**Ask a question:**
-```bash
-curl -X POST http://127.0.0.1:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"question": "How many in-office days per week do hybrid employees need?"}'
-```
+## Test Retrieval and Generation
 
-Expected response shape:
-```json
-{
-  "answer": "Hybrid employees are required to be in the office at least 2 days per week...",
-  "sources": ["remote_work_policy.txt"]
-}
-```
-
-**Ask something the documents cannot answer:**
-```bash
-curl -X POST http://127.0.0.1:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"question": "What is the CEO home address?"}'
-```
-
-A well-grounded system should reply: *"I don't have enough information in the
-documents to answer that."* — not make something up. If it hallucinates, look
-at the `SYSTEM_PROMPT` in `app/config.py` — that's what controls this behaviour.
-
-### Step 4: Inspect Retrieval Quality
+Run:
 
 ```bash
 poetry run python -m scripts.test_queries
 ```
 
-This runs several preset questions and prints, for each one:
-- which chunks were retrieved
-- their similarity distance scores
-- the final generated answer
+The script prints:
 
-Read the raw retrieved chunks. If the answer is wrong, the problem is almost
-always here — the wrong chunk was retrieved, not the LLM making things up. This
-is the most important debugging skill in RAG.
+- the question
+- retrieved source files
+- chunk indexes
+- vector distances
+- chunk previews
+- the generated answer
+
+The complete test results are recorded in `test_log.md`.
 
 ---
 
-## How FastAPI Turns RAG into a Real API
+## Run the CLI Chat
 
-Without FastAPI, the RAG pipeline is just Python functions you call in a
-script. FastAPI wraps those functions so any client — a web app, mobile app,
-or another backend service — can use them over HTTP.
+If the CLI loop has been added to `app/main.py`, run:
 
-Here is what happens when you hit `/chat`:
-
-```
-POST /chat  {"question": "..."}
-        |
-  app/main.py  →  retrieve(question)   # calls retrieval.py
-                →  generate_answer(question, chunks)  # calls generate.py
-                →  returns JSON response
+```bash
+poetry run python -m app.main
 ```
 
-Look at `app/main.py` — the entire API is about 50 lines. Notice:
+The CLI repeatedly accepts questions and allows the user to type `exit` to quit.
 
-- **`BaseModel` (Pydantic):** FastAPI automatically validates the request body
-  against `ChatRequest`. If a required field is missing or the wrong type, it
-  returns a clear error — you don't write any validation code yourself.
-- **`response_model=ChatResponse`:** FastAPI serializes the return value to
-  JSON and validates its shape before sending it. The client always gets a
-  predictable structure.
-- **Automatic docs:** FastAPI generates interactive documentation at
-  `http://127.0.0.1:8000/docs` — open it in a browser and you can try all
-  endpoints without curl.
+---
 
-The interactive docs URL (try it now):
+## Run the FastAPI Server
+
+Run:
+
+```bash
+poetry run uvicorn app.main:app --reload
 ```
+
+Open the interactive API documentation at:
+
+```text
 http://127.0.0.1:8000/docs
 ```
 
----
+Available endpoints:
 
-## Project Layout
-
-```
-app/
-  config.py       ← every tunable value in one place: models, chunk size, top_k, system prompt
-  embeddings.py   ← embed_texts() / embed_query() — shared by ingest and retrieval
-  ingest.py       ← load_documents(), chunk_text(), build_index() — Stages 1 & 2
-  retrieval.py    ← retrieve() — embed the question, query ChromaDB — Stage 3
-  generate.py     ← build_prompt(), generate_answer() — augmentation + LLM call — Stage 4
-  main.py         ← FastAPI app: /health, /ingest, /chat
-data/             ← source documents (swap in your own .txt / .pdf files)
-chroma_db/        ← auto-generated vector index (do not edit manually)
-scripts/
-  test_queries.py ← sample questions + retrieval/answer inspection tool
+```text
+POST /ingest
+POST /chat
 ```
 
----
+### POST `/ingest`
 
-## All the Knobs You Can Turn (in `app/config.py`)
+Rebuilds the ChromaDB index from the files inside `data/`.
 
-| Setting | Default | What it does |
-|---|---|---|
-| `EMBED_MODEL` | `nomic-embed-text` | Ollama model used for embedding |
-| `GEN_MODEL` | `qwen3:8b` | Ollama model used for generation |
-| `CHUNK_SIZE` | `800` | Characters per chunk |
-| `CHUNK_OVERLAP` | `120` | Characters shared between adjacent chunks |
-| `TOP_K` | `4` | How many chunks to retrieve per question |
-| `SYSTEM_PROMPT` | (see file) | Instruction to the LLM about grounding |
+### POST `/chat`
+
+Accepts a question, retrieves relevant chunks, generates an answer, and returns the answer together with the source filenames.
 
 ---
 
-## Live Experiments to Try with Students
+## Testing Summary
 
-1. **Chunk size experiment**
-   Change `CHUNK_SIZE` from `800` to `200`, delete `chroma_db/`, re-run
-   `app.ingest`, then ask questions that span two ideas. Watch retrieval
-   quality change.
+The RAG application was tested with six questions:
 
-2. **Top-k experiment**
-   Change `TOP_K` from `4` to `1`. Watch the model start missing context
-   on multi-part questions.
+1. Hybrid work requirements
+2. Home-office equipment stipend
+3. Expense report deadline
+4. CEO home address — out of scope
+5. Personal cat name — out of scope
+6. Employee onboarding
 
-3. **Hallucination experiment**
-   Comment out the `SYSTEM_PROMPT` grounding instruction and ask an
-   out-of-scope question. Watch the model make things up instead of saying
-   "I don't know".
+The out-of-scope tests showed that the model stayed grounded and responded that it did not have enough information instead of inventing an answer.
 
-4. **Print the prompt**
-   In `app/generate.py`, add `print(prompt)` before the Ollama call.
-   Run a query and see exactly what the LLM receives — this demystifies
-   "prompt augmentation" completely.
+---
 
-5. **Swap your own documents**
-   Replace the files in `data/` with anything you like (meeting notes,
-   textbook chapters, recipes). Re-run `app.ingest` and the whole pipeline
-   immediately works on your new content.
+## Observed Limitation
+
+The onboarding test retrieved three relevant chunks from `onboarding_guide.txt`, but the fourth retrieved chunk came from `remote_work_policy.txt`.
+
+Because all four retrieved chunks were passed to the generation model, the final answer included information about the $400 home-office stipend even though that information was not directly relevant to the onboarding question.
+
+This demonstrates a limitation of basic Top-K vector retrieval: a retrieved chunk can be semantically related but still introduce unnecessary context.
+
+Possible future improvements include:
+
+- re-ranking retrieved chunks
+- adding a relevance threshold
+- query rewriting
+- semantic chunking
+- hybrid keyword + vector retrieval
+
+---
+
+## Test Log
+
+Detailed test results are available in `test_log.md`.
+
+---
+
+## Reflection
+
+A separate 150–300 word reflection should summarize:
+
+- what worked well
+- what was harder than expected
+- one future Advanced RAG improvement

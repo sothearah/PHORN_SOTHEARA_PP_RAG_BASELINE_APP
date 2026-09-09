@@ -20,6 +20,8 @@ TEST_QUESTIONS = [
     "How much is the home-office equipment stipend?",
     "How long do I have to submit an expense report?",
     "What is the CEO's home address?",  # deliberately not in any document
+    "What is my cat name?",
+    "What should a new employee complete during onboarding?",
 ]
 
 
