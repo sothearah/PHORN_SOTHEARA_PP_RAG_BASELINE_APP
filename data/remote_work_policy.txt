@@ -1,0 +1,41 @@
+Remote Work Policy — Novalink Devices
+
+Effective Date: January 2026
+
+1. Eligibility
+Employees who have completed their 90-day probationary period and whose role
+does not require daily on-site presence (e.g. lab equipment, hardware
+assembly) may apply for a remote or hybrid work arrangement. Applications are
+submitted through the HR portal and require manager approval.
+
+2. Work Schedule
+Remote employees are expected to be reachable during core hours, 10:00 AM to
+3:00 PM local time, regardless of time zone. Outside of core hours, employees
+may arrange their schedule freely as long as weekly deliverables are met.
+
+3. Equipment
+The company provides a laptop, a monitor, and a one-time home-office stipend
+of $400 for desk and chair setup. Employees are responsible for maintaining a
+stable internet connection of at least 25 Mbps download / 5 Mbps upload.
+
+4. Communication Expectations
+Remote employees must keep their status updated on the team chat tool and
+attend the daily 15-minute stand-up call. Cameras are optional for stand-ups
+but required for client-facing meetings.
+
+5. In-Office Days
+Hybrid employees are required to be in the office at least 2 days per week,
+Tuesday and Thursday, for team collaboration sessions. Fully remote employees
+(approved separately by department heads) are exempt from this requirement.
+
+6. Review Period
+Remote work arrangements are reviewed every 6 months. The arrangement may be
+revoked if performance metrics fall below expectations for two consecutive
+review cycles, with a 30-day notice period before the employee is required to
+return to full on-site work.
+
+7. International Remote Work
+Employees wishing to work remotely from a country other than their country of
+employment must get written approval from HR and Legal at least 60 days in
+advance, due to tax and labor law implications. Unapproved international
+remote work is treated as unauthorized absence.
